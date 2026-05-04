@@ -1,0 +1,34 @@
+version: "3.3"
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: tfm
+      POSTGRES_PASSWORD: tfm1234
+      POSTGRES_DB: forecasting
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    restart: unless-stopped
+
+  mlflow:
+    build: ./docker/mlflow
+    ports:
+      - "5000:5000"
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --backend-store-uri postgresql://tfm:tfm1234@postgres/forecasting
+      --default-artifact-root /mlflow/artifacts
+    volumes:
+      - mlflow_artifacts:/mlflow/artifacts
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  mlflow_artifacts:
