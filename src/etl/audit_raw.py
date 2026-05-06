@@ -7,6 +7,7 @@ DB_URL = "postgresql://tfm:tfm1234@localhost:5432/forecasting"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
+
 def audit_raw():
     engine = create_engine(DB_URL)
     df = pd.read_sql("SELECT * FROM staging.sales_raw", engine)
@@ -16,7 +17,9 @@ def audit_raw():
     print(f"\n--- Nulos por columna ---")
     print(df.isnull().sum())
 
-    print(f"\n--- Duplicados (sku, sale_date): {df.duplicated(subset=['sku','sale_date']).sum()} ---")
+    print(
+        f"\n--- Duplicados (sku, sale_date): {df.duplicated(subset=['sku','sale_date']).sum()} ---"
+    )
 
     df["sale_date"] = pd.to_datetime(df["sale_date"])
     print(f"\n--- Rango fechas: {df['sale_date'].min()} -> {df['sale_date'].max()} ---")
@@ -35,6 +38,7 @@ def audit_raw():
     print("\n--- promotion_flag ---")
     print(df["promotion_flag"].value_counts())
     print("\n=== FIN AUDIT ===\n")
+
 
 if __name__ == "__main__":
     audit_raw()

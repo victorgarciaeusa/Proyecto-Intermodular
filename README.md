@@ -1,160 +1,87 @@
-# TFM Forecasting de Demanda
+# TFM Forecasting — Sistema de Predicción de Demanda
 
-Sistema end-to-end de predicción de demanda semanal a partir de históricos de ventas y variables externas. Dado un histórico de ventas por tienda (SKU), el sistema predice las unidades vendidas en las próximas 4 semanas.
+Pipeline end-to-end de forecasting semanal para 10 SKUs con horizonte de 4 semanas.
 
-**Autores:** Javi · Víctor &nbsp;|&nbsp; **Mayo 2026**
+## Requisitos
 
----
-
-## Arquitectura del proyecto
-
-```
-CSV de ventas
-     │
-     ▼
-staging.sales_raw          ← Ingesta raw con logging
-     │
-     ▼
-analytics.sales_curated    ← Limpieza y validación
-     │
-     ▼
-analytics.features         ← Feature engineering (lags, calendario, exógenas)
-     │
-     ▼
-Modelos: XGBoost · Prophet · SARIMAX · Baseline
-     │
-     ▼
-analytics.predictions      ← Predicciones con intervalos de confianza
-```
-
----
-
-## Stack tecnológico
-
-| Capa | Tecnología |
-|---|---|
-| Base de datos | PostgreSQL 15 |
-| Tracking de experimentos | MLflow 2.12.1 |
-| Orquestación | Prefect |
-| Modelado | XGBoost, Prophet, statsmodels (SARIMAX) |
-| ETL | Python, pandas, SQLAlchemy |
-| Infraestructura | Docker, docker-compose |
-
----
-
-## Estructura del repositorio
-
-```
-├── docker-compose.yml        # Servicios: PostgreSQL + MLflow
-├── schema.sql                # Definición de tablas
-├── requirements.txt          # Dependencias Python
-├── docker/
-│   └── mlflow/
-│       └── Dockerfile
-├── src/
-│   ├── etl/                  # Ingesta, auditoría y curación (Javi)
-│   ├── models/               # XGBoost, Prophet, SARIMAX, baseline (Víctor + Javi)
-│   └── serving/              # Batch predictor semanal (Javi)
-├── notebooks/
-│   └── 01_eda_exploration.ipynb   # EDA completo (Víctor)
-├── data/
-│   └── raw/
-│       └── store_sales.csv
-├── tests/                    # pytest, cobertura >80% (Javi)
-└── docs/                     # Memoria TFM, slides (Víctor)
-```
-
----
-
-## Levantar el entorno
-
-### Requisitos previos
-- Docker y docker-compose instalados
+- Docker + docker-compose
 - Python 3.8+
+- Ubuntu 20.04+
 
-### Arrancar los servicios
+## Instalación
 
 ```bash
 git clone https://github.com/victorgarciaeusa/Proyecto-Intermodular.git
 cd Proyecto-Intermodular
-docker-compose up -d --build
+pip3 install -r requirements.txt
 ```
 
-Esto levanta:
-- **PostgreSQL 15** en `localhost:5432` con los esquemas `staging` y `analytics` ya creados
-- **MLflow** en `http://localhost:5000`
-
-### Instalar dependencias Python
+## Levantar infraestructura
 
 ```bash
-python -m venv venv
-venv\Scripts\activate      # Windows
-# source venv/bin/activate  # Linux/Mac
-pip install -r requirements.txt
+docker-compose up -d
+docker-compose ps  # verificar PostgreSQL + MLflow Up
 ```
 
-### Ejecutar el pipeline ETL
+MLflow UI disponible en: http://localhost:5000
+
+## Ejecutar pipeline completo
 
 ```bash
-# 1. Ingesta CSV → staging.sales_raw
-python src/etl/ingest.py
+# 1. Ingesta
+python3 src/etl/ingest.py
 
-# 2. Auditoría del raw
-python src/etl/audit_raw.py
+# 2. Curación
+python3 src/etl/curate.py
 
-# 3. Curación → analytics.sales_curated
-python src/etl/curate.py
+# 3. Feature engineering
+python3 src/etl/feature_engineering.py
+
+# 4. Modelos
+python3 src/models/baseline.py
+python3 src/models/sarimax_model.py
+python3 src/models/xgboost_model.py
+python3 src/models/prophet_model.py
+
+# 5. Análisis de residuos
+python3 src/models/residuals_analysis.py
+
+# 6. Batch predictor semanal
+python3 src/serving/batch_predictor.py
+
+# 7. MLOps flow (Prefect)
+python3 src/serving/mlops_flow.py
 ```
 
----
+## Tests
 
-## Dataset
+```bash
+python3 -m pytest tests/ -v --cov=tests --cov-report=term-missing
+```
 
-| Parámetro | Valor |
-|---|---|
-| Fichero | `store_sales.csv` |
-| Filas | 7.300 |
-| Tiendas (SKUs) | 10 (1–10) |
-| Rango temporal | 2022-01-01 → 2023-12-31 |
-| Columnas | date, store, sales, promo, holiday |
-| Nulos | 0 |
-| Duplicados | 0 |
+## Resultados — MAPE comparativa
 
----
-
-## Hitos del proyecto
-
-| Hito | Día | Entregable | Estado |
+| Modelo | MAPE Global | MAPE Promo | MAPE No-promo |
 |---|---|---|---|
-| H1 | 4 | `analytics.sales_curated` — 0 nulos, >90% filas | ✅ |
-| H2 | 7 | Baseline operativo — MAPE 15–20% | 🔄 |
-| H3 | 10 | Comparativa modelos — MAPE < 12% | ⏳ |
-| H4 | 11 | Análisis segmentado completo | ⏳ |
+| Baseline seasonal_naive | 7.79% | 10.95% | 6.99% |
+| Prophet afinado | 4.23% | 4.01% | 4.28% |
+| SARIMAX (0,1,2)(0,1,1,7) | 3.74% | 3.47% | 3.81% |
+| XGBoost riguroso | 3.73% | 3.40% | 3.81% |
 
----
+**Modelo final seleccionado: SARIMAX** — mejor diagnóstico de residuos (Ljung-Box p=0.342), sin sesgo sistemático, homocedastico.
 
-## Modelos
+## Estructura del repositorio
 
-| Modelo | Responsable | Estado |
-|---|---|---|
-| Seasonal Naive (baseline) | Javi | 🔄 |
-| XGBoost | Víctor | ⏳ |
-| Prophet | Víctor | ⏳ |
-| SARIMAX | Javi | ⏳ |
+src/
+├── etl/           # Ingesta, curación, feature engineering
+├── models/        # Baseline, SARIMAX, XGBoost, Prophet, residuos
+└── serving/       # Batch predictor, MLOps flow Prefect
+tests/             # pytest — 22 tests, cobertura 99%
+data/raw/          # CSV fuente
+docs/              # Memoria TFM, diarios técnicos
+docker-compose.yml # PostgreSQL + MLflow
+schema.sql         # Definición tablas
 
-La métrica de evaluación principal es el **MAPE** (Mean Absolute Percentage Error). Objetivo final: MAPE < 12%.
-
----
-
-## Credenciales por defecto (desarrollo)
-
-```
-PostgreSQL:
-  host:     localhost:5432
-  user:     tfm
-  password: tfm1234
-  db:       forecasting
-
-MLflow:   http://localhost:5000
-SSH VM:   ssh -p 2222 forecast_user@localhost
-```
+## Variables de entorno
+DB_URL=postgresql://tfm:tfm1234@localhost:5432/forecasting
+MLFLOW_URI=http://localhost:5000

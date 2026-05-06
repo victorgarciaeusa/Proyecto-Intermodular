@@ -5,10 +5,8 @@ import logging
 RANDOM_SEED = 42
 DB_URL = "postgresql://tfm:tfm1234@localhost:5432/forecasting"
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
 
 def curate():
     engine = create_engine(DB_URL)
@@ -35,24 +33,24 @@ def curate():
 
     # 5. Escribir a analytics.sales_curated
     cols = ["sku", "sale_date", "quantity", "promotion_flag"]
-    df[cols].to_sql(
-        "sales_curated", engine,
-        schema="analytics",
-        if_exists="replace",
-        index=False
-    )
+    df[cols].to_sql("sales_curated", engine, schema="analytics", if_exists="replace", index=False)
     logging.info("[CURACIÓN] analytics.sales_curated poblada ✅")
 
     # 6. Verificación final
-    result = engine.execute("""
+    result = engine.execute(
+        """
         SELECT
             COUNT(*) AS total,
             SUM(CASE WHEN sku IS NULL THEN 1 ELSE 0 END) AS nulos_sku,
             SUM(CASE WHEN sale_date IS NULL THEN 1 ELSE 0 END) AS nulos_fecha,
             SUM(CASE WHEN quantity IS NULL THEN 1 ELSE 0 END) AS nulos_qty
         FROM analytics.sales_curated
-    """).fetchone()
-    logging.info(f"[VERIFY] total={result[0]} nulos_sku={result[1]} nulos_fecha={result[2]} nulos_qty={result[3]}")
+    """
+    ).fetchone()
+    logging.info(
+        f"[VERIFY] total={result[0]} nulos_sku={result[1]} nulos_fecha={result[2]} nulos_qty={result[3]}"
+    )
+
 
 if __name__ == "__main__":
     curate()

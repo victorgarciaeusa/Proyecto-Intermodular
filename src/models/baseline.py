@@ -10,10 +10,12 @@ MLFLOW_URI = "http://localhost:5000"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
+
 def mape(y_true, y_pred):
     y_true, y_pred = np.array(y_true), np.array(y_pred)
     mask = y_true != 0
     return np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100
+
 
 def expanding_window_backtest(df: pd.DataFrame, min_train_days: int = 90):
     results = []
@@ -38,15 +40,18 @@ def expanding_window_backtest(df: pd.DataFrame, min_train_days: int = 90):
         y_pred = lag7_rows["quantity"].values[0]
         y_true = test_row["quantity"].values[0]
 
-        results.append({
-            "sale_date": test_date,
-            "sku": test_row["sku"].values[0],
-            "y_true": y_true,
-            "y_pred": y_pred,
-            "promotion_flag": test_row["promotion_flag"].values[0]
-        })
+        results.append(
+            {
+                "sale_date": test_date,
+                "sku": test_row["sku"].values[0],
+                "y_true": y_true,
+                "y_pred": y_pred,
+                "promotion_flag": test_row["promotion_flag"].values[0],
+            }
+        )
 
     return pd.DataFrame(results)
+
 
 def run_baseline():
     engine = create_engine(DB_URL)
@@ -63,14 +68,20 @@ def run_baseline():
 
     results = pd.concat(all_results).reset_index(drop=True)
 
-    mape_global  = mape(results["y_true"], results["y_pred"])
-    mape_promo   = mape(results[results["promotion_flag"]==True]["y_true"],
-                        results[results["promotion_flag"]==True]["y_pred"])
-    mape_nopromo = mape(results[results["promotion_flag"]==False]["y_true"],
-                        results[results["promotion_flag"]==False]["y_pred"])
-    mape_sku = results.groupby("sku").apply(
-        lambda g: mape(g["y_true"], g["y_pred"])
-    ).reset_index(name="mape")
+    mape_global = mape(results["y_true"], results["y_pred"])
+    mape_promo = mape(
+        results[results["promotion_flag"] == True]["y_true"],
+        results[results["promotion_flag"] == True]["y_pred"],
+    )
+    mape_nopromo = mape(
+        results[results["promotion_flag"] == False]["y_true"],
+        results[results["promotion_flag"] == False]["y_pred"],
+    )
+    mape_sku = (
+        results.groupby("sku")
+        .apply(lambda g: mape(g["y_true"], g["y_pred"]))
+        .reset_index(name="mape")
+    )
 
     logging.info(f"[BASELINE] MAPE global:   {mape_global:.2f}%")
     logging.info(f"[BASELINE] MAPE promo:    {mape_promo:.2f}%")
@@ -89,6 +100,7 @@ def run_baseline():
         results.to_csv("/tmp/baseline_predictions.csv", index=False)
         results.to_csv("/tmp/baseline_predictions.csv", index=False)
         logging.info("[BASELINE] Run registrado en MLflow ✅")
+
 
 if __name__ == "__main__":
     run_baseline()
