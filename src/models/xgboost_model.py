@@ -1,7 +1,6 @@
-import os
 import pandas as pd
 import numpy as np
-from sqlalchemy import create_engine
+import psycopg2
 from xgboost import XGBRegressor
 from sklearn.metrics import mean_absolute_percentage_error
 import mlflow
@@ -10,7 +9,15 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # Configuracion de conexion
-DB_URL = "postgresql+psycopg2://tfm:tfm1234@127.0.0.1:5432/forecasting"
+DB_CONFIG = {
+    "host": "127.0.0.1",
+    "port": 5432,
+    "dbname": "forecasting",
+    "user": "tfm",
+    "password": "tfm1234",
+    "sslmode": "disable"
+}
+
 MLFLOW_URI = "http://127.0.0.1:5000"
 
 # Variables del modelo
@@ -21,8 +28,9 @@ TARGET = "quantity"
 
 def load_features():
     """Carga la tabla analytics.features desde PostgreSQL."""
-    engine = create_engine(DB_URL)
-    df = pd.read_sql("SELECT * FROM analytics.features", engine)
+    conn = psycopg2.connect(**DB_CONFIG)
+    df = pd.read_sql("SELECT * FROM analytics.features", conn)
+    conn.close()
     df["sale_date"] = pd.to_datetime(df["sale_date"])
     df = df.sort_values(["sku", "sale_date"]).reset_index(drop=True)
     df = df.dropna(subset=FEATURES)
